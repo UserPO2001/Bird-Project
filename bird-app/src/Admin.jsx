@@ -210,13 +210,27 @@ function Admin() {
     
     if (!editingBird) return;
     
+    // Format the data to ensure all required fields are present with correct names
+    const formattedBirdData = {
+      name: editingBird.name,
+      scientific_name: editingBird.scientific_name || editingBird.sciName,
+      family: editingBird.family,
+      order_name: editingBird.order_name || editingBird.order,
+      group_id: editingBird.group_id || editingBird.groupId,
+      image_path: editingBird.image_path || editingBird.imagePath,
+      sound_path: editingBird.sound_path || editingBird.soundPath,
+      habitat: editingBird.habitat,
+      diet: editingBird.diet,
+      description: editingBird.description
+    };
+    
     try {
       const response = await fetch(`/api/admin/birds/${editingBird.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(editingBird)
+        body: JSON.stringify(formattedBirdData)
       });
       
       if (response.ok) {

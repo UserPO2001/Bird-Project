@@ -326,16 +326,26 @@ function createBird(birdData) {
 function updateBird(birdId, birdData) {
   const { 
     name, 
-    scientific_name, 
+    scientific_name,
+    sciName,
     family, 
-    order_name, 
-    group_id, 
+    order_name,
+    order,
+    group_id,
+    groupId,
     image_path, 
     sound_path, 
     habitat, 
     diet, 
     description 
   } = birdData;
+
+  // Use scientific_name if available, otherwise use sciName
+  const finalScientificName = scientific_name || sciName;
+  // Use order_name if available, otherwise use order
+  const finalOrderName = order_name || order;
+  // Use group_id if available, otherwise use groupId
+  const finalGroupId = group_id || groupId;
 
   // Begin transaction
   const trx = db.transaction(() => {
@@ -349,10 +359,10 @@ function updateBird(birdId, birdData) {
     
     updateBird.run(
       name, 
-      scientific_name, 
+      finalScientificName,
       family, 
-      order_name, 
-      group_id, 
+      finalOrderName,
+      finalGroupId,
       image_path, 
       sound_path,
       birdId

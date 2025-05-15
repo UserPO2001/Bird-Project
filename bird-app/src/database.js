@@ -48,6 +48,21 @@ function initializeDatabase() {
       FOREIGN KEY (bird_id) REFERENCES birds(id)
     )
   `);
+
+  // Create Admin table for authentication
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS admin (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT NOT NULL UNIQUE,
+      password TEXT NOT NULL
+    )
+  `);
+
+  // Insert default admin with password 'root'
+  const adminCount = db.prepare('SELECT COUNT(*) as count FROM admin').get();
+  if (adminCount.count === 0) {
+    db.prepare('INSERT INTO admin (username, password) VALUES (?, ?)').run('admin', 'root');
+  }
 }
 
 // Insert initial data
@@ -201,6 +216,226 @@ function getBirdsByGroupName(groupName) {
   return db.prepare('SELECT name FROM birds WHERE group_id = ?').all(group.id).map(bird => bird.name);
 }
 
+// CRUD operations for admin
+
+// Admin Authentication
+function validateAdminCredentials(username, password) {
+  const admin = db.prepare('SELECT * FROM admin WHERE username = ? AND password = ?').get(username, password);
+  return admin !== undefined;
+}
+
+// Bird Groups CRUD
+function createBirdGroup(name) {
+  try {
+    const insertGroup = db.prepare('INSERT INTO bird_groups (name) VALUES (?)');
+    const result = insertGroup.run(name);
+    return { success: true, id: result.lastInsertRowid };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+function updateBirdGroup(id, name) {
+  try {
+    const updateGroup = db.prepare('UPDATE bird_groups SET name = ? WHERE id = ?');
+    const result = updateGroup.run(name, id);
+    return { success: result.changes > 0, changes: result.changes };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+function deleteBirdGroup(id) {
+  try {
+    // First check if there are birds in this group
+    const birdCount = db.prepare('SELECT COUNT(*) as count FROM birds WHERE group_id = ?').get(id);
+    if (birdCount.count > 0) {
+      return { success: false, error: 'Cannot delete group with birds. Delete birds first.' };
+    }
+    
+    const deleteGroup = db.prepare('DELETE FROM bird_groups WHERE id = ?');
+    const result = deleteGroup.run(id);
+    return { success: result.changes > 0, changes: result.changes };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+// Birds CRUD
+function createBird(birdData) {
+  const { 
+    name, 
+    scientific_name, 
+    family, 
+    order_name, 
+    group_id, 
+    image_path, 
+    sound_path, 
+    habitat, 
+    diet, 
+    description 
+  } = birdData;
+
+  // Begin transaction
+  const trx = db.transaction(() => {
+    // Insert bird
+    const insertBird = db.prepare(`
+      INSERT INTO birds (name, scientific_name, family, order_name, group_id, image_path, sound_path)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+    
+    const birdResult = insertBird.run(
+      name, 
+      scientific_name, 
+      family, 
+      order_name, 
+      group_id, 
+      image_path, 
+      sound_path
+    );
+    
+    const birdId = birdResult.lastInsertRowid;
+    
+    // Insert specific info
+    const insertSpecificInfo = db.prepare(`
+      INSERT INTO specific_info (bird_id, habitat, diet)
+      VALUES (?, ?, ?)
+    `);
+    
+    insertSpecificInfo.run(birdId, habitat, diet);
+    
+    // Insert general info
+    const insertGeneralInfo = db.prepare(`
+      INSERT INTO general_info (bird_id, description)
+      VALUES (?, ?)
+    `);
+    
+    insertGeneralInfo.run(birdId, description);
+    
+    return birdId;
+  });
+
+  try {
+    const birdId = trx();
+    return { success: true, id: birdId };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+function updateBird(birdId, birdData) {
+  const { 
+    name, 
+    scientific_name, 
+    family, 
+    order_name, 
+    group_id, 
+    image_path, 
+    sound_path, 
+    habitat, 
+    diet, 
+    description 
+  } = birdData;
+
+  // Begin transaction
+  const trx = db.transaction(() => {
+    // Update bird
+    const updateBird = db.prepare(`
+      UPDATE birds 
+      SET name = ?, scientific_name = ?, family = ?, order_name = ?, 
+          group_id = ?, image_path = ?, sound_path = ?
+      WHERE id = ?
+    `);
+    
+    updateBird.run(
+      name, 
+      scientific_name, 
+      family, 
+      order_name, 
+      group_id, 
+      image_path, 
+      sound_path,
+      birdId
+    );
+    
+    // Update specific info
+    const updateSpecificInfo = db.prepare(`
+      UPDATE specific_info 
+      SET habitat = ?, diet = ?
+      WHERE bird_id = ?
+    `);
+    
+    updateSpecificInfo.run(habitat, diet, birdId);
+    
+    // Update general info
+    const updateGeneralInfo = db.prepare(`
+      UPDATE general_info 
+      SET description = ?
+      WHERE bird_id = ?
+    `);
+    
+    updateGeneralInfo.run(description, birdId);
+    
+    return true;
+  });
+
+  try {
+    trx();
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+function deleteBird(birdId) {
+  // Begin transaction
+  const trx = db.transaction(() => {
+    // Delete general info
+    db.prepare('DELETE FROM general_info WHERE bird_id = ?').run(birdId);
+    
+    // Delete specific info
+    db.prepare('DELETE FROM specific_info WHERE bird_id = ?').run(birdId);
+    
+    // Delete bird
+    db.prepare('DELETE FROM birds WHERE id = ?').run(birdId);
+    
+    return true;
+  });
+
+  try {
+    trx();
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+// Get all birds with complete info
+function getAllBirds() {
+  const birds = db.prepare('SELECT * FROM birds').all();
+  
+  return birds.map(bird => {
+    const specificInfo = db.prepare('SELECT * FROM specific_info WHERE bird_id = ?').get(bird.id);
+    const generalInfo = db.prepare('SELECT * FROM general_info WHERE bird_id = ?').get(bird.id);
+    const groupName = getGroupNameById(bird.group_id);
+    
+    return {
+      id: bird.id,
+      name: bird.name,
+      sciName: bird.scientific_name,
+      family: bird.family,
+      order: bird.order_name,
+      groupId: bird.group_id,
+      groupName,
+      habitat: specificInfo.habitat,
+      diet: specificInfo.diet,
+      description: generalInfo.description,
+      imagePath: bird.image_path,
+      soundPath: bird.sound_path
+    };
+  });
+}
+
 // Initialize the database
 initializeDatabase();
 seedDatabase();
@@ -211,5 +446,13 @@ export {
   getBirdData,
   getBirdByName,
   getGroupNameById,
-  getBirdsByGroupName
+  getBirdsByGroupName,
+  validateAdminCredentials,
+  createBirdGroup,
+  updateBirdGroup,
+  deleteBirdGroup,
+  createBird,
+  updateBird,
+  deleteBird,
+  getAllBirds
 }; 

@@ -65,3 +65,69 @@ This will start:
 - `GET /api/bird/:id`: Get bird data by ID
 - `GET /api/bird/name/:name`: Get bird data by name
 - `GET /api/group/:id/name`: Get group name by ID
+
+## File Handling and Security
+
+### Media Files
+The application uses file paths instead of storing actual media files in the database. This approach was chosen for several reasons:
+
+1. **Security:**
+   - Prevents potential security risks from malicious file uploads
+   - Protects against buffer overflow attacks through media files
+   - Reduces the risk of server compromise through file processing vulnerabilities
+   - Maintains better control over content integrity
+
+2. **Performance:**
+   - Reduces database size and improves query performance
+   - Faster database operations and backups
+   - Better memory management
+   - Improved application loading times
+
+3. **Maintenance and Scalability:**
+   - Easier to update or replace files without changing database records
+   - Simpler backup and restore procedures
+   - More flexible file organization and structure
+   - Better separation of concerns between data and media
+
+4. **File Structure:**
+   - Images should be placed in the `public/images` directory
+   - Audio files should be placed in the `public/sounds` directory
+   - File paths in the database should be relative to these directories
+   - Example paths:
+     - Images: `/images/bird-name.webp`
+     - Sounds: `/sounds/bird-name.mp3`
+
+5. **File Requirements:**
+   - Images: WebP format recommended for optimal performance
+   - Audio: MP3 format for broad compatibility
+   - All files should be pre-verified before being added to the project
+   - File names should be lowercase and use hyphens for spaces
+
+### Setting Up on a New Machine
+
+When setting up the project on a new machine:
+
+1. Ensure all media files are properly placed in their respective directories
+2. Verify file paths in the database match the actual file locations
+3. Check file permissions to ensure the application can access the media files
+4. Do not modify the file structure without updating the database accordingly
+
+### Best Practices
+
+1. **File Management:**
+   - Keep file sizes optimized for web delivery
+   - Use consistent naming conventions
+   - Regularly audit and clean up unused files
+   - Maintain a backup of all media files
+
+2. **Database Management:**
+   - Keep file paths consistent and well-documented
+   - Regularly validate that all referenced files exist
+   - Implement proper error handling for missing files
+   - Consider implementing a file validation system
+
+3. **Version Control:**
+   - Media files should be tracked in version control
+   - Use .gitignore appropriately for temporary files
+   - Consider using Git LFS for large files
+   - Maintain a clear history of file changes
